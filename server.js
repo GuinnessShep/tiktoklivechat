@@ -91,7 +91,7 @@ setInterval(() => {
 // Serve frontend files
 app.use(express.static('public'));
 
-// Start http listener
+// Start http listener on local
 const port = process.env.PORT || 8081;
 httpServer.listen(port);
 console.info(`Server running! Please visit http://localhost:${port}`);
