@@ -49,7 +49,7 @@ class TikTokConnectionWrapper extends EventEmitter {
             this.reconnectCount = 0;
             this.reconnectWaitMs = 1000;
 
-            // Client disconnected while establishing connection => drop connection
+            // If client disconnected while establishing connection => drop connection
             if (this.clientDisconnected) {
                 this.connection.disconnect();
                 return;
