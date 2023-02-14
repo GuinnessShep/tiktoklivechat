@@ -17,7 +17,3 @@ Simply open http://localhost:8091/ in your browser. Thats it.
 
 If you have problems with Node.js, you can also just open the `index.html` from the `public` folder.<br>
 This will use the server backend of the [demo site](https://tiklivechat.herokuapp.com/), which is sufficient for testing purposes. If you want to offer it to others or make many connections at the same time, please consider using your own server.
-
-## Screenshot
-
-![TikTok LIVE Chat Reader (Demo)](https://user-images.githubusercontent.com/59258980/153956504-c585b14b-a50e-43f0-a994-64adcaface2e.png)
