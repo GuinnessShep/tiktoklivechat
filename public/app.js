@@ -1,4 +1,3 @@
-Guinness Shepherd
 // This will use the demo backend if you open index.html locally via file://, otherwise your server will be used
 let backendUrl = location.protocol === 'file:' ? "https://tiklivechat.herokuapp.com" : undefined;
 let connection = new TikTokIOConnection(backendUrl);
