@@ -1,343 +1,226 @@
-// Get DOM elements
-const connectButton = document.getElementById('connectButton');
-const uniqueIdInput = document.getElementById('uniqueIdInput');
-const stateText = document.getElementById('stateText');
-const chatContainer = document.querySelector('.chatcontainer');
-const giftContainer = document.querySelector('.giftcontainer');
-const eventContainer = document.querySelector('.eventcontainer');
-const roomStats = document.getElementById('roomStats');
+Guinness Shepherd
+// This will use the demo backend if you open index.html locally via file://, otherwise your server will be used
+let backendUrl = location.protocol === 'file:' ? "https://tiklivechat.herokuapp.com" : undefined;
+let connection = new TikTokIOConnection(backendUrl);
 
 // Counter
 let viewerCount = 0;
 let likeCount = 0;
 let diamondsCount = 0;
-let giftCount = 0;
-let giftCost = 0;
 
 // These settings are defined by obs.html
-const settings = window.settings || {};
+if (!window.settings) window.settings = {};
 
-// Create a TikTokIOConnection instance
-const backendUrl = location.protocol === 'file:' ? "https://tiklivechat.herokuapp.com" : undefined;
-const connection = new TikTokIOConnection(backendUrl);
+$(document).ready(() => {
+    $('#connectButton').click(connect);
+    $('#uniqueIdInput').on('keyup', function (e) {
+        if (e.key === 'Enter') {
+            connect();
+        }
+    });
 
-// Connect to the TikTokIO websocket
-connectButton.addEventListener('click', connect);
-uniqueIdInput.addEventListener('keyup', (event) => {
-  if (event.key === 'Enter') {
-    connect();
-  }
-});
-
-if (settings.username) {
-  connect();
-}
+    if (window.settings.username) connect();
+})
 
 function connect() {
-  const uniqueId = settings.username || uniqueIdInput.value;
-  if (uniqueId !== '') {
-    stateText.innerText = 'Connecting...';
+    let uniqueId = window.settings.username || $('#uniqueIdInput').val();
+    if (uniqueId !== '') {
 
-    connection.connect(uniqueId, {
-      enableExtendedGiftInfo: true,
-    })
-    .then((state) => {
-      stateText.innerText = `Connected to roomId ${state.roomId}`;
+        $('#stateText').text('Connecting...');
 
-      // Reset stats
-      viewerCount = 0;
-      likeCount = 0;
-      diamondsCount = 0;
-      giftCount = 0;
-      giftCost = 0;
-      updateRoomStats();
-    })
-    .catch((errorMessage) => {
-      stateText.innerText = errorMessage;
+        connection.connect(uniqueId, {
+            enableExtendedGiftInfo: true
+        }).then(state => {
+            $('#stateText').text(`Connected to roomId ${state.roomId}`);
 
-      // Schedule next try if obs username set
-      if (settings.username) {
-        setTimeout(() => {
-          connect(settings.username);
-        }, 30000);
-      }
-    });
-  } else {
-    alert('no username entered');
-  }
+            // reset stats
+            viewerCount = 0;
+            likeCount = 0;
+            diamondsCount = 0;
+            updateRoomStats();
+
+        }).catch(errorMessage => {
+            $('#stateText').text(errorMessage);
+
+            // schedule next try if obs username set
+            if (window.settings.username) {
+                setTimeout(() => {
+                    connect(window.settings.username);
+                }, 30000);
+            }
+        })
+
+    } else {
+        alert('no username entered');
+    }
 }
 
 // Prevent Cross site scripting (XSS)
 function sanitize(text) {
-  return text.replace(/</g, '&lt;');
+    return text.replace(/</g, '&lt;')
 }
 
 function updateRoomStats() {
-  roomStats.innerHTML = `Viewers: <b>${viewerCount.toLocaleString()}</b> Likes: <b>${likeCount.toLocaleString()}</b> Earned Diamonds: <b>${diamondsCount.toLocaleString()}</b>`;
+    $('#roomStats').html(`Viewers: <b>${viewerCount.toLocaleString()}</b> Likes: <b>${likeCount.toLocaleString()}</b> Earned Diamonds: <b>${diamondsCount.toLocaleString()}</b>`)
 }
 
 function generateUsernameLink(data) {
-  return `<a class="usernamelink" href="https://www.tiktok.com/@${data.uniqueId}" target="_blank">${data.uniqueId}</a>`;
+    return `<a class="usernamelink" href="https://www.tiktok.com/@${data.uniqueId}" target="_blank">${data.uniqueId}</a>`;
 }
 
 function isPendingStreak(data) {
-  return data.giftType === 1 && !data.repeatEnd;
+    return data.giftType === 1 && !data.repeatEnd;
 }
 
+/**
+ * Add a new message to the chat container
+ */
 function addChatItem(color, data, text, summarize) {
-  const container = eventContainer.contains(chatContainer) ? eventContainer : chatContainer;
+    let container = location.href.includes('obs.html') ? $('.eventcontainer') : $('.chatcontainer');
 
-  // Summarize repeating messages
-  if (summarize) {
-    const lastMessage = container.lastElement
+    if (container.find('div').length > 500) {
+        container.find('div').slice(0, 200).remove();
+    }
 
-// Add the message to the existing summary if it matches
-if (lastMessage && lastMessage.dataset.type === 'chat' && lastMessage.dataset.color === color && lastMessage.dataset.sender === data.uniqueId && lastMessage.dataset.message === text) {
-lastMessage.dataset.count = parseInt(lastMessage.dataset.count) + 1;
-lastMessage.querySelector('.chatcount').innerText = x${lastMessage.dataset.count};
-return;
-}
-}
+    container.find('.temporary').remove();;
 
-// Otherwise, create a new chat item
-const chatItem = document.createElement('div');
-chatItem.classList.add('chatitem');
-chatItem.dataset.type = 'chat';
-chatItem.dataset.color = color;
-chatItem.dataset.sender = data.uniqueId;
-chatItem.dataset.message = text;
+    container.append(`
+        <div class=${summarize ? 'temporary' : 'static'}>
+            <img class="miniprofilepicture" src="${data.profilePictureUrl}">
+            <span>
+                <b>${generateUsernameLink(data)}:</b> 
+                <span style="color:${color}">${sanitize(text)}</span>
+            </span>
+        </div>
+    `);
 
-const usernameLink = generateUsernameLink(data);
-const chatMessage = sanitize(text);
-chatItem.innerHTML = <span class="chattime">${new Date().toLocaleTimeString()}</span> ${usernameLink}: ${chatMessage};
-if (summarize) {
-chatItem.dataset.count = 1;
-chatItem.innerHTML += <span class="chatcount">x1</span>;
-}
-chatItem.style.color = color;
-
-container.appendChild(chatItem);
-container.scrollTop = container.scrollHeight - container.clientHeight;
+    container.stop();
+    container.animate({
+        scrollTop: container[0].scrollHeight
+    }, 400);
 }
 
-function addGiftItem(data, cost) {
-const giftItem = document.createElement('div');
-giftItem.classList.add('giftitem');
-giftItem.dataset.type = 'gift';
-giftItem.dataset.giftId = data.giftId;
+/**
+ * Add a new gift to the gift container
+ */
+function addGiftItem(data) {
+    let container = location.href.includes('obs.html') ? $('.eventcontainer') : $('.giftcontainer');
 
-const usernameLink = generateUsernameLink(data);
-const giftName = sanitize(data.giftName);
-giftItem.innerHTML = <span class="gifttime">${new Date().toLocaleTimeString()}</span> ${usernameLink} sent a ${giftName} for ${cost} diamonds.;
+    if (container.find('div').length > 200) {
+        container.find('div').slice(0, 100).remove();
+    }
 
-giftContainer.appendChild(giftItem);
-giftContainer.scrollTop = giftContainer.scrollHeight - giftContainer.clientHeight;
+    let streakId = data.userId.toString() + '_' + data.giftId;
+
+    let html = `
+        <div data-streakid=${isPendingStreak(data) ? streakId : ''}>
+            <img class="miniprofilepicture" src="${data.profilePictureUrl}">
+            <span>
+                <b>${generateUsernameLink(data)}:</b> <span>${data.describe}</span><br>
+                <div>
+                    <table>
+                        <tr>
+                            <td><img class="gifticon" src="${data.giftPictureUrl}"></td>
+                            <td>
+                                <span>Name: <b>${data.giftName}</b> (ID:${data.giftId})<span><br>
+                                <span>Repeat: <b style="${isPendingStreak(data) ? 'color:red' : ''}">x${data.repeatCount.toLocaleString()}</b><span><br>
+                                <span>Cost: <b>${(data.diamondCount * data.repeatCount).toLocaleString()} Diamonds</b><span>
+                            </td>
+                        </tr>
+                    </tabl>
+                </div>
+            </span>
+        </div>
+    `;
+
+    let existingStreakItem = container.find(`[data-streakid='${streakId}']`);
+
+    if (existingStreakItem.length) {
+        existingStreakItem.replaceWith(html);
+    } else {
+        container.append(html);
+    }
+
+    container.stop();
+    container.animate({
+        scrollTop: container[0].scrollHeight
+    }, 800);
 }
 
-// Listen for TikTokIO events
-connection.on('ViewerCount', (data) => {
-viewerCount = data.count;
-updateRoomStats();
-});
 
-connection.on('LikeCount', (data) => {
-likeCount = data.count;
-updateRoomStats();
-});
-
-connection.on('GiftCount', (data) => {
-giftCount += data.count;
-giftCost += data.diamondsCount;
-diamondsCount += data.diamondsCount;
-updateRoomStats();
-
-if (data.giftType === 2) {
-const giftName = sanitize(data.giftName);
-addChatItem(data.color, data, just sent a ${giftName}!, false);
-} else {
-addGiftItem(data, data.diamondsCount);
-if (isPendingStreak(data)) {
-const usernameLink = generateUsernameLink(data);
-const giftName = sanitize(data.giftName);
-addChatItem(data.color, data, is on a ${giftName} streak! (${data.repeatCount}/${data.repeatTotal}), false);
-}
-}
-});
-
-connection.on('Chat', (data) => {
-addChatItem(data.color, data, data.text, true);
-});
-
-connection.on('Event', (data) => {
-addChatItem(data.color, data, data.text, false);
-});
-
-connection.on('ChatMessage', (data) => {
-addChatItem(data.color, data, data.message, true);
-});
-
-connection.on('EventMessage', (data) => {
-const messageType = data.messageType;
-const color = data.color;
-const message = data.message;
-
-switch (messageType) {
-case 'enter':
-addChatItem(color, data, 'just joined the live stream!', false);
-break;
-case 'leave':
-addChatItem(color, data, 'just left the live stream!', false);
-break;
-case 'follow':
-addChatItem(color, data, 'just followed!', false);
-break;
-case 'firstLike':
-addChatItem(color, data, 'is the first to like this stream!', false);
-break;
-case 'guestJoin':
-addChatItem(color, data, 'joined as a guest!', false);
-break;
-case 'guestLeave':
-addChatItem(color, data, 'left as a guest!', false);
-break;
-case 'memberJoin':
-addChatItem(color, data, 'just joined as a member!', false);
-break;
-case 'memberLeave':
-addChatItem(color, data, 'just left as a member!', false);
-break;
-case 'share':
-addChatItem(color, data, 'just shared this stream!', false);
-break;
-case 'system':
-addChatItem(color, data, message, false);
-break;
-default:
-console.warn(Unhandled message type: ${messageType});
-}
-});
-
-// Send chat messages
-const chatInput = document.getElementById('chatInput');
-chatInput.addEventListener('keyup', (event) => {
-if (event.key === 'Enter') {
-const message = chatInput.value;
-if (message !== '') {
-connection.sendChatMessage(message);
-chatInput.value = '';
-}
-}
-});
-
-// Send gifts
-const giftSelect = document.getElementById('giftSelect');
-giftSelect.addEventListener('change', () => {
-giftCost = parseInt(giftSelect.value);
-});
-
-const giftButton = document.getElementById('giftButton');
-giftButton.addEventListener('click', () => {
-connection.sendGift(giftSelect.value);
-});
-
-// Load gift images
-const giftImageMap = new Map();
-for (const [name, image] of Object.entries(giftImages)) {
-const img = new Image();
-img.src = image;
-giftImageMap.set(name, img);
-}
-
-// Display selected gift image
-giftSelect.addEventListener('change', () => {
-const selectedGift = giftSelect.value;
-const selectedImage = giftImageMap.get(selectedGift);
-const previewImage = document.getElementById('giftPreviewImage');
-previewImage.src = selectedImage.src;
-});
-
-// Initialize UI
-const roomIdSpan = document.getElementById('roomIdSpan');
-roomIdSpan.innerText = settings.roomId;
-uniqueIdInput.value = settings.username || '';
-
-// Show/hide containers
-const chatToggle = document.getElementById('chatToggle');
-const giftToggle = document.getElementById('giftToggle');
-const eventToggle = document.getElementById('eventToggle');
-
-chatToggle.addEventListener('click', () => {
-chatContainer.classList.toggle('hidden');
-});
-
-giftToggle.addEventListener('click', () => {
-giftContainer.classList.toggle('hidden');
-});
-
-eventToggle.addEventListener('click', () => {
-eventContainer.classList.toggle('hidden');
-});
-
-// Listen for TikTokIO events
-connection.on('ViewerCount', (data) => {
-viewerCount = data.count;
-updateRoomStats();
-});
-
-connection.on('LikeCount', (data) => {
-likeCount = data.count;
-updateRoomStats();
-});
-
-connection.on('GiftCount', (data) => {
-giftCount += data.count;
-giftCost += data.diamondsCount;
-diamondsCount += data.diamondsCount;
-updateRoomStats();
-
-if (data.giftType === 2) {
-const giftName = sanitize(data.giftName);
-addChatItem(data.color, data, just sent a ${giftName}!, false);
-} else {
-addGiftItem(data, data.diamondsCount);
-if (isPendingStreak(data)) {
-const usernameLink = generateUsernameLink(data);
-const giftName = sanitize(data.giftName);
-addChatItem(data.color, data, is on a ${giftName} streak! (${data.repeatCount}/${data.repeatTotal}), false);
-}
-}
-});
-
-connection.on('Chat', (data) => {
-addChatItem(data.color, data, data.content, true);
-});
-
-connection.on('Follow', (data) => {
-addChatItem(data.color, data, is now following!, false);
-});
-
-connection.on('Share', (data) => {
-addChatItem(data.color, data, just shared the stream!, false);
-});
-
-connection.on('Other', (data) => {
-addChatItem(data.color, data, data.content, false);
-});
-
-connection.on('Error', (error) => {
-console.error('TikTokIOConnection error:', error);
-stateText.innerText = 'Connection error. Retrying in 30 seconds...';
-setTimeout(connect, 30000);
-});
-
-// Update viewer count and stats every minute
-setInterval(() => {
-connection.requestViewerCount()
-.then((data) => {
-viewerCount = data.count;
-updateRoomStats();
+// viewer stats
+connection.on('roomUser', (msg) => {
+    if (typeof msg.viewerCount === 'number') {
+        viewerCount = msg.viewerCount;
+        updateRoomStats();
+    }
 })
-.catch((error) => {
-console.error('Failed to update viewer count:', error);
-});
-}, 60000);
+
+// like stats
+connection.on('like', (msg) => {
+    if (typeof msg.totalLikeCount === 'number') {
+        likeCount = msg.totalLikeCount;
+        updateRoomStats();
+    }
+
+    if (window.settings.showLikes === "0") return;
+
+    if (typeof msg.likeCount === 'number') {
+        addChatItem('#447dd4', msg, msg.label.replace('{0:user}', '').replace('likes', `${msg.likeCount} likes`))
+    }
+})
+
+// Member join
+let joinMsgDelay = 0;
+connection.on('member', (msg) => {
+    if (window.settings.showJoins === "0") return;
+
+    let addDelay = 250;
+    if (joinMsgDelay > 500) addDelay = 100;
+    if (joinMsgDelay > 1000) addDelay = 0;
+
+    joinMsgDelay += addDelay;
+
+    setTimeout(() => {
+        joinMsgDelay -= addDelay;
+        addChatItem('#21b2c2', msg, 'joined', true);
+    }, joinMsgDelay);
+})
+
+// New chat comment received
+connection.on('chat', (msg) => {
+    if (window.settings.showChats === "0") return;
+
+    addChatItem('', msg, msg.comment);
+})
+
+// New gift received
+connection.on('gift', (data) => {
+    if (!isPendingStreak(data) && data.diamondCount > 0) {
+        diamondsCount += (data.diamondCount * data.repeatCount);
+        updateRoomStats();
+    }
+
+    if (window.settings.showGifts === "0") return;
+
+    addGiftItem(data);
+})
+
+// share, follow
+connection.on('social', (data) => {
+    if (window.settings.showFollows === "0") return;
+
+    let color = data.displayType.includes('follow') ? '#ff005e' : '#2fb816';
+    addChatItem(color, data, data.label.replace('{0:user}', ''));
+})
+
+connection.on('streamEnd', () => {
+    $('#stateText').text('Stream ended.');
+
+    // schedule next try if obs username set
+    if (window.settings.username) {
+        setTimeout(() => {
+            connect(window.settings.username);
+        }, 30000);
+    }
+})
