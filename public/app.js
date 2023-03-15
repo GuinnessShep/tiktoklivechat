@@ -1,225 +1,146 @@
-// This will use the demo backend if you open index.html locally via file://, otherwise your server will be used
-let backendUrl = location.protocol === 'file:' ? "https://tiklivechat.herokuapp.com" : undefined;
-let connection = new TikTokIOConnection(backendUrl);
+// Get the backend URL
+const backendUrl = location.protocol === 'file:' ? "https://tiklivechat.herokuapp.com" : undefined;
 
-// Counter
+// Initialize the TikTokIOConnection
+const connection = new TikTokIOConnection(backendUrl);
+
+// Counter variables
 let viewerCount = 0;
 let likeCount = 0;
 let diamondsCount = 0;
 
-// These settings are defined by obs.html
-if (!window.settings) window.settings = {};
+// Check if settings exist, and set them if they don't
+window.settings ??= {};
 
+// Wait for the document to be ready before binding event handlers
 $(document).ready(() => {
-    $('#connectButton').click(connect);
-    $('#uniqueIdInput').on('keyup', function (e) {
-        if (e.key === 'Enter') {
-            connect();
-        }
-    });
+$('#connectButton').click(connect);
+$('#uniqueIdInput').on('keyup', (e) => {
+if (e.key === 'Enter') connect();
+});
 
-    if (window.settings.username) connect();
-})
+if (window.settings.username) connect();
+});
 
+// Connect to the chat server
 function connect() {
-    let uniqueId = window.settings.username || $('#uniqueIdInput').val();
-    if (uniqueId !== '') {
+const uniqueId = window.settings.username || $('#uniqueIdInput').val().trim();
 
-        $('#stateText').text('Connecting...');
+if (!uniqueId) return alert('Please enter a username.');
 
-        connection.connect(uniqueId, {
-            enableExtendedGiftInfo: true
-        }).then(state => {
-            $('#stateText').text(`Connected to roomId ${state.roomId}`);
+$('#stateText').text('Connecting...');
 
-            // reset stats
-            viewerCount = 0;
-            likeCount = 0;
-            diamondsCount = 0;
-            updateRoomStats();
+connection
+.connect(uniqueId, { enableExtendedGiftInfo: true })
+.then((state) => {
+$('#stateText').text(Connected to roomId ${state.roomId});
 
-        }).catch(errorMessage => {
-            $('#stateText').text(errorMessage);
-
-            // schedule next try if obs username set
-            if (window.settings.username) {
-                setTimeout(() => {
-                    connect(window.settings.username);
-                }, 30000);
-            }
-        })
-
-    } else {
-        alert('no username entered');
-    }
-}
-
-// Prevent Cross site scripting (XSS)
-function sanitize(text) {
-    return text.replace(/</g, '&lt;')
-}
-
-function updateRoomStats() {
-    $('#roomStats').html(`Viewers: <b>${viewerCount.toLocaleString()}</b> Likes: <b>${likeCount.toLocaleString()}</b> Earned Diamonds: <b>${diamondsCount.toLocaleString()}</b>`)
-}
-
-function generateUsernameLink(data) {
-    return `<a class="usernamelink" href="https://www.tiktok.com/@${data.uniqueId}" target="_blank">${data.uniqueId}</a>`;
-}
-
-function isPendingStreak(data) {
-    return data.giftType === 1 && !data.repeatEnd;
-}
-
-/**
- * Add a new message to the chat container
- */
-function addChatItem(color, data, text, summarize) {
-    let container = location.href.includes('obs.html') ? $('.eventcontainer') : $('.chatcontainer');
-
-    if (container.find('div').length > 500) {
-        container.find('div').slice(0, 200).remove();
-    }
-
-    container.find('.temporary').remove();;
-
-    container.append(`
-        <div class=${summarize ? 'temporary' : 'static'}>
-            <img class="miniprofilepicture" src="${data.profilePictureUrl}">
-            <span>
-                <b>${generateUsernameLink(data)}:</b> 
-                <span style="color:${color}">${sanitize(text)}</span>
-            </span>
-        </div>
-    `);
-
-    container.stop();
-    container.animate({
-        scrollTop: container[0].scrollHeight
-    }, 400);
-}
-
-/**
- * Add a new gift to the gift container
- */
-function addGiftItem(data) {
-    let container = location.href.includes('obs.html') ? $('.eventcontainer') : $('.giftcontainer');
-
-    if (container.find('div').length > 200) {
-        container.find('div').slice(0, 100).remove();
-    }
-
-    let streakId = data.userId.toString() + '_' + data.giftId;
-
-    let html = `
-        <div data-streakid=${isPendingStreak(data) ? streakId : ''}>
-            <img class="miniprofilepicture" src="${data.profilePictureUrl}">
-            <span>
-                <b>${generateUsernameLink(data)}:</b> <span>${data.describe}</span><br>
-                <div>
-                    <table>
-                        <tr>
-                            <td><img class="gifticon" src="${data.giftPictureUrl}"></td>
-                            <td>
-                                <span>Name: <b>${data.giftName}</b> (ID:${data.giftId})<span><br>
-                                <span>Repeat: <b style="${isPendingStreak(data) ? 'color:red' : ''}">x${data.repeatCount.toLocaleString()}</b><span><br>
-                                <span>Cost: <b>${(data.diamondCount * data.repeatCount).toLocaleString()} Diamonds</b><span>
-                            </td>
-                        </tr>
-                    </tabl>
-                </div>
-            </span>
-        </div>
-    `;
-
-    let existingStreakItem = container.find(`[data-streakid='${streakId}']`);
-
-    if (existingStreakItem.length) {
-        existingStreakItem.replaceWith(html);
-    } else {
-        container.append(html);
-    }
-
-    container.stop();
-    container.animate({
-        scrollTop: container[0].scrollHeight
-    }, 800);
-}
-
-
-// viewer stats
-connection.on('roomUser', (msg) => {
-    if (typeof msg.viewerCount === 'number') {
-        viewerCount = msg.viewerCount;
-        updateRoomStats();
-    }
+  // Reset the stats
+  viewerCount = 0;
+  likeCount = 0;
+  diamondsCount = 0;
+  updateRoomStats();
 })
+.catch((errorMessage) => {
+  $('#stateText').text(errorMessage);
 
-// like stats
-connection.on('like', (msg) => {
-    if (typeof msg.totalLikeCount === 'number') {
-        likeCount = msg.totalLikeCount;
-        updateRoomStats();
-    }
-
-    if (window.settings.showLikes === "0") return;
-
-    if (typeof msg.likeCount === 'number') {
-        addChatItem('#447dd4', msg, msg.label.replace('{0:user}', '').replace('likes', `${msg.likeCount} likes`))
-    }
-})
-
-// Member join
-let joinMsgDelay = 0;
-connection.on('member', (msg) => {
-    if (window.settings.showJoins === "0") return;
-
-    let addDelay = 250;
-    if (joinMsgDelay > 500) addDelay = 100;
-    if (joinMsgDelay > 1000) addDelay = 0;
-
-    joinMsgDelay += addDelay;
-
+  // Schedule the next try if the OBS username is set
+  if (window.settings.username) {
     setTimeout(() => {
-        joinMsgDelay -= addDelay;
-        addChatItem('#21b2c2', msg, 'joined', true);
-    }, joinMsgDelay);
-})
+      connect(window.settings.username);
+    }, 30000);
+  }
+});
+}
 
-// New chat comment received
-connection.on('chat', (msg) => {
-    if (window.settings.showChats === "0") return;
+// Sanitize a string to prevent XSS attacks
+function sanitize(text) {
+return text.replace(/</g, '<');
+}
 
-    addChatItem('', msg, msg.comment);
-})
+// Update the room statistics display
+function updateRoomStats() {
+$('#roomStats').html(Viewers: <b>${viewerCount.toLocaleString()}</b> Likes: <b>${likeCount.toLocaleString()}</b> Earned Diamonds: <b>${diamondsCount.toLocaleString()}</b>);
+}
 
-// New gift received
+// Generate a link to the user's TikTok profile
+function generateUsernameLink(data) {
+return <a class="usernamelink" href="https://www.tiktok.com/@${data.uniqueId}" target="_blank">${data.uniqueId}</a>;
+}
+
+// Check if a gift is part of a pending streak
+function isPendingStreak(data) {
+return data.giftType === 1 && !data.repeatEnd;
+}
+
+// Add a new item to the chat container
+function addChatItem(color, data, text, summarize) {
+const container = location.href.includes('obs.html') ? $('.eventcontainer') : $('.chatcontainer');
+
+if (container.find('div').length > 500) {
+container.find('div').slice(0, 200).remove();
+}
+
+container.find('.temporary').remove();
+
+container.append( <div class=${summarize ? 'temporary' : 'static'}> <img class="miniprofilepicture" src="${data.profilePictureUrl}"> <span> <b>${generateUsernameLink(data)}:</b> <span style="color:${color}">${sanitize(text)}</span> </span> </div> );
+
+container.stop().animate({ scrollTop: container[0].scrollHeight }, 400);
+}
+
+// Add a new gift to the gift container
+function addGiftItem(data) {
+const container = location.href.includes('obs.html') ? $('.eventcontainer') : $('.giftcontainer');
+
+if (container.find('div').length >
+
+{
+container.find('div').slice(0, 200).remove();
+}
+container.append(`
+
+<div class="giftitem">
+<img class="giftimage" src="${data.giftImageUrl}">
+<div class="giftinfo">
+<div class="giftusername">${generateUsernameLink(data)}</div>
+<div class="giftname">${data.giftName}</div>
+<div class="giftcount">x ${data.giftCount}</div>
+</div>
+</div>
+`);
+container.stop().animate({ scrollTop: container[0].scrollHeight }, 400);
+
+// Update the diamonds count
+if (data.giftType === 3) {
+diamondsCount += data.giftCount;
+updateRoomStats();
+}
+}
+
+// Bind event handlers for incoming chat and gift messages
+connection.on('chat', (data) => {
+const { color, text, summarize } = data;
+addChatItem(color, data, text, summarize);
+});
+
 connection.on('gift', (data) => {
-    if (!isPendingStreak(data) && data.diamondCount > 0) {
-        diamondsCount += (data.diamondCount * data.repeatCount);
-        updateRoomStats();
-    }
+addGiftItem(data);
+});
 
-    if (window.settings.showGifts === "0") return;
+// Bind event handlers for incoming room stats updates
+connection.on('viewerCount', (count) => {
+viewerCount = count;
+updateRoomStats();
+});
 
-    addGiftItem(data);
-})
+connection.on('likeCount', (count) => {
+likeCount = count;
+updateRoomStats();
+});
 
-// share, follow
-connection.on('social', (data) => {
-    if (window.settings.showFollows === "0") return;
-
-    let color = data.displayType.includes('follow') ? '#ff005e' : '#2fb816';
-    addChatItem(color, data, data.label.replace('{0:user}', ''));
-})
-
-connection.on('streamEnd', () => {
-    $('#stateText').text('Stream ended.');
-
-    // schedule next try if obs username set
-    if (window.settings.username) {
-        setTimeout(() => {
-            connect(window.settings.username);
-        }, 30000);
-    }
-})
+// Periodically check the connection and attempt to reconnect if necessary
+setInterval(() => {
+if (connection.getState() === 'CLOSED') {
+connect();
+}
+}, 30000);
